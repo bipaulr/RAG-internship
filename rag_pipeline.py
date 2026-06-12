@@ -6,11 +6,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from groq import Groq
+try:
+    from groq import Groq
+except ImportError:
+    print("groq importing failed")
+    sys.exit(1
 
-groq_client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
-)
+groq_api_key = os.getenv("GROQ_API_KEY", "").strip()
+if not groq_api_key:
+    print("groq api not found")
+    sys.exit(1)
+groq_client = Groq(api_key=groq_api_key)
 
 try:
     from google import genai
