@@ -10,7 +10,7 @@ try:
     from groq import Groq
 except ImportError:
     print("groq importing failed")
-    sys.exit(1
+    sys.exit(1)
 
 groq_api_key = os.getenv("GROQ_API_KEY", "").strip()
 if not groq_api_key:
@@ -111,7 +111,7 @@ class RAGState(TypedDict):
     error: str              # error message if anything goes wrong
 
 
-#nodes of langgrapgh pipeline
+# nodes of langgrapgh pipeline
 
 def chunk_node(state: RAGState) -> RAGState:
     """Node 1 — Split the document into chunks."""
