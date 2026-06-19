@@ -2,37 +2,37 @@ RAW PIPELINE ANSWERS
 ============================================================
 
 Q1: What is Retrieval Augmented Generation?
-Answer: Retrieval-augmented generation (RAG) is a technique that enables GenAI models to retrieve and incorporate new information, modifying interactions with a large language model (LLM) to respond to user queries with reference to a specified set of documents, and supplementing pre-existing training data with domain-specific and/or updated information.
-Sources: Large_language_model.txt, Prompt_engineering.txt, Retrieval-augmented_generation.txt, Vector_database.txt
+Answer: Retrieval-augmented generation (RAG) is a technique that enables GenAI models to retrieve and incorporate new information by modifying interactions with a large language model (LLM) to respond to user queries with reference to a specified set of documents, using this information to supplement its pre-existing training data.
+Sources: Retrieval-augmented_generation.txt, Prompt_engineering.txt, Large_language_model.txt, Vector_database.txt
 ----------------------------------------
 
 Q2: What is machine learning?
-Answer: Machine learning is the study of programs that can improve their performance on a given task automatically, and it is a field of study in artificial intelligence concerned with the development and study of statistical algorithms that can learn from data and generalize to unseen data, and thus perform tasks without being explicitly programmed.
+Answer: Machine learning is the study of programs that can improve their performance on a given task automatically. It is a field of study in artificial intelligence concerned with the development and study of statistical algorithms that can learn from data and generalize to unseen data, and thus perform tasks without being explicitly programmed.
 Sources: Artificial_intelligence.txt, Machine_learning.txt
 ----------------------------------------
 
 Q3: What is deep learning?
-Answer: Deep learning refers to a class of machine learning algorithms in which a hierarchy of layers is used to transform input data into a progressively more abstract and composite representation. It utilizes multilayered neural networks to perform tasks such as classification, regression, and representation learning, and takes inspiration from biological neuroscience.
-Sources: Artificial_intelligence.txt, Convolutional_neural_network.txt, Deep_learning.txt
+Answer: Deep learning refers to a class of machine learning algorithms that use a hierarchy of layers to transform input data into a progressively more abstract and composite representation, utilizing multilayered neural networks to perform tasks such as classification, regression, and representation learning.
+Sources: Deep_learning.txt, Artificial_intelligence.txt, Convolutional_neural_network.txt
 ----------------------------------------
 
 Q4: What is a transformer in deep learning?
 Answer: A transformer in deep learning is a family of artificial neural network architectures based on the multi-head attention mechanism, in which text is converted to numerical representations called tokens, and each token is converted into a vector via lookup from a word embedding table.
-Sources: Artificial_intelligence.txt, Convolutional_neural_network.txt, Transformer_(deep_learning_architecture).txt
+Sources: Transformer_(deep_learning_architecture).txt, Artificial_intelligence.txt, Convolutional_neural_network.txt
 ----------------------------------------
 
 Q5: What is natural language processing?
 Answer: Natural language processing (NLP) is the processing of natural language information by a computer, and it allows programs to read, write, and communicate in human languages.
-Sources: Reinforcement_learning.txt, Artificial_intelligence.txt, Natural_language_processing.txt
+Sources: Natural_language_processing.txt, Artificial_intelligence.txt, Reinforcement_learning.txt
 ----------------------------------------
 
 Q6: What is a large language model?
 Answer: A large language model (LLM) is a neural network trained on a vast amount of text for natural language processing tasks, especially language generation.
-Sources: Large_language_model.txt, Retrieval-augmented_generation.txt
+Sources: Retrieval-augmented_generation.txt, Large_language_model.txt
 ----------------------------------------
 
 Q7: What is a word embedding?
-Answer: A word embedding is a representation of a word, typically a real-valued vector that encodes the meaning of the word in such a way that the words that are closer in the vector space are expected to be similar in meaning.
+Answer: A word embedding is a representation of a word, typically a real-valued vector that encodes the meaning of the word, such that words closer in the vector space are expected to be similar in meaning.
 Sources: Word_embedding.txt, Vector_database.txt
 ----------------------------------------
 
@@ -42,8 +42,8 @@ Sources: Vector_database.txt
 ----------------------------------------
 
 Q9: What is prompt engineering?
-Answer: The action or process of formulating and refining prompts for an artificial intelligence program, algorithm, etc., in order to optimize its output or to achieve a desired outcome. It involves structuring natural language inputs to produce specified outputs from a generative artificial intelligence (GenAI) model.
-Sources: Large_language_model.txt, Prompt_engineering.txt
+Answer: Prompt engineering is the action or process of formulating and refining prompts for an artificial intelligence program, algorithm, etc., in order to optimize its output or to achieve a desired outcome. It involves structuring natural language inputs to produce specified outputs from a generative artificial intelligence (GenAI) model.
+Sources: Prompt_engineering.txt, Large_language_model.txt
 ----------------------------------------
 
 Q10: What is fine-tuning in deep learning?
@@ -57,7 +57,7 @@ Sources: Convolutional_neural_network.txt
 ----------------------------------------
 
 Q12: What is reinforcement learning?
-Answer: Reinforcement learning is an area of machine learning concerned with how software agents ought to take actions in an environment to maximise some notion of cumulative reward. It involves a computer program interacting with a dynamic environment, receiving rewards as feedback, and learning from experience to maximize those rewards.
+Answer: Reinforcement learning is an area of machine learning concerned with how software agents ought to take actions in an environment to maximise some notion of cumulative reward. It involves a computer program interacting with a dynamic environment to perform a certain goal, and learning from experience through rewards provided as feedback, in order to maximize a reward signal.
 Sources: Reinforcement_learning.txt, Machine_learning.txt
 ----------------------------------------
 
@@ -82,18 +82,18 @@ Sources: Transformer_(deep_learning_architecture).txt
 ----------------------------------------
 
 Q17: What is supervised learning?
-Answer: Supervised learning is when the computer is presented with example inputs and their desired outputs, given by a "teacher", and the goal is to learn a general rule that maps inputs to outputs. It requires labeling the training data with the expected answers.
+Answer: Supervised learning is when a computer is presented with example inputs and their desired outputs, given by a "teacher", and the goal is to learn a general rule that maps inputs to outputs. The computer builds a mathematical model of a set of data that contains both the inputs and the desired outputs, with the goal of making predictions, either by classification (predicting a category) or regression (predicting a numeric function).
 Sources: Artificial_intelligence.txt, Machine_learning.txt
 ----------------------------------------
 
 Q18: What is unsupervised learning?
-Answer: Unsupervised learning is a type of machine learning where the computer is left on its own to find structure in its input data without any labels or guidance, and it identifies commonalities in the data and reacts based on their presence or absence.
+Answer: Unsupervised learning is a type of machine learning where no labels are given to the learning algorithm, and it finds structures in unlabelled data by identifying commonalities and reacting based on their presence or absence. It analyzes a stream of data, finds patterns, and makes predictions without any other guidance.
 Sources: Artificial_intelligence.txt, Machine_learning.txt
 ----------------------------------------
 
 Q19: What is transfer learning?
-Answer: Transfer learning is when the knowledge gained from one problem is applied to a new problem. It can also refer to the process of training a network on a larger data set from a related domain and then fine-tuning it using in-domain data.
-Sources: Fine-tuning_(deep_learning).txt, Artificial_intelligence.txt, Machine_learning.txt, Prompt_engineering.txt, Convolutional_neural_network.txt
+Answer: Transfer learning is when the knowledge gained from one problem is applied to a new problem. It can also be achieved by training a network on a larger data set from a related domain and then fine-tuning the network weights using the in-domain data.
+Sources: Convolutional_neural_network.txt, Prompt_engineering.txt, Artificial_intelligence.txt, Fine-tuning_(deep_learning).txt, Machine_learning.txt
 ----------------------------------------
 
 Q20: What is the difference between AI and machine learning?

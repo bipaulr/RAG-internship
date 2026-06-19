@@ -13,25 +13,29 @@ try:
     from datasets import Dataset
     from ragas import evaluate
     from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision
-    from ragas.llms import LangchainLLMWrapper
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from ragas.llms import llm_factory
+    from openai import OpenAI
 except ImportError as e:
-    print(f" Missing dependency: {e}")
-    print("Run: py -3.13 -m pip install ragas==0.4.3 datasets langchain-community langchain-huggingface langchain-google-genai sentence-transformers groq chromadb")
+    print(f"Missing dependency: {e}")
+    print("Run: pip install ragas==0.4.3 datasets langchain-community langchain-huggingface sentence-transformers groq chromadb openai")
     sys.exit(1)
 
 GROQ_API_KEY   = os.getenv("GROQ_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
 if not GROQ_API_KEY:
-    print("❌ GROQ_API_KEY not found in .env file.")
+    print("GROQ_API_KEY not found in .env file.")
     sys.exit(1)
 if not GEMINI_API_KEY:
-    print("❌ GEMINI_API_KEY not found in .env file. RAGAS needs it for scoring.")
+    print("GEMINI_API_KEY not found in .env file. RAGAS needs it for scoring.")
     sys.exit(1)
 
-os.environ["GOOGLE_API_KEY"] = GEMINI_API_KEY
-print(" API keys loaded.")
+print("API keys loaded.")
+
+# RAGAS internally checks for OPENAI_API_KEY in some code paths even when
+# a custom client is passed to llm_factory. Since we are routing through
+# Gemini's OpenAI-compatible endpoint anyway, we set this to satisfy that check.
+os.environ["OPENAI_API_KEY"] = GEMINI_API_KEY
 
 CHROMA_DB_FOLDER = "./chroma_db"
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
@@ -39,10 +43,10 @@ TOP_K            = 5
 LLM_MODEL        = "llama-3.3-70b-versatile"
 
 if not os.path.exists(CHROMA_DB_FOLDER):
-    print("❌ chroma_db/ not found. Run ingest.py first.")
+    print("chroma_db/ not found. Run ingest.py first.")
     sys.exit(1)
 
-print(" Loading embedding model and ChromaDB...")
+print("Loading embedding model and ChromaDB...")
 embeddings = HuggingFaceEmbeddings(
     model_name=EMBEDDING_MODEL,
     model_kwargs={"device": "cpu"},
@@ -53,7 +57,7 @@ vectorstore = Chroma(
     embedding_function=embeddings
 )
 groq_client = Groq(api_key=GROQ_API_KEY)
-print(" Ready.\n")
+print("Ready.\n")
 
 
 # 20 test questions with ground truth answers for evaluation
@@ -131,7 +135,7 @@ def run_pipeline(question: str) -> dict:
 
 
 # collects answers for all 20 questions and runs RAGAS evaluation on them
-print(" Running 20 questions through pipeline...\n")
+print("Running 20 questions through pipeline...\n")
 
 questions     = []
 answers       = []
@@ -149,21 +153,22 @@ for i, item in enumerate(TEST_DATA):
         ground_truths.append(item["ground_truth"])
         sources_list.append(result["sources"])
     except Exception as e:
-        print(f"  ❌ Failed: {e}")
+        print(f"  Failed: {e}")
 
-print(f"\n {len(answers)}/20 questions answered.\n")
+print(f"\n{len(answers)}/20 questions answered.\n")
 
 
- 
-print(" Running RAGAS evaluation using Gemini for scoring...")
-print("   This may take 1-2 minutes...\n")
+print("Running RAGAS evaluation using Gemini for scoring...")
+print("This may take 1-2 minutes...\n")
 
-# using gemni llm for scoring the answers with RAGAS
-gemini_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    google_api_key=GEMINI_API_KEY
+# using gemini as the judge llm for scoring the answers with RAGAS
+# gemini exposes an openai-compatible endpoint, so we use the openai client
+# pointed at google's servers instead of openai's servers
+gemini_openai_client = OpenAI(
+    api_key=GEMINI_API_KEY,
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
 )
-ragas_llm = LangchainLLMWrapper(gemini_llm)
+ragas_llm = llm_factory("gemini-2.0-flash", client=gemini_openai_client)
 
 # initialise metrics with the judge LLM
 faithfulness      = Faithfulness(llm=ragas_llm)
@@ -184,20 +189,20 @@ try:
     )
 
     print("\n" + "=" * 60)
-    print("  RAGAS EVALUATION RESULTS")
+    print("RAGAS EVALUATION RESULTS")
     print("=" * 60)
-    print(f"  Faithfulness:      {results['faithfulness']:.4f}")
-    print(f"  Answer Relevancy:  {results['answer_relevancy']:.4f}")
-    print(f"  Context Precision: {results['context_precision']:.4f}")
+    print(f"Faithfulness:      {results['faithfulness']:.4f}")
+    print(f"Answer Relevancy:  {results['answer_relevancy']:.4f}")
+    print(f"Context Precision: {results['context_precision']:.4f}")
     print("=" * 60)
-    print("\n  Scores above 0.7 are good. Above 0.85 is excellent.")
+    print("\nScores above 0.7 are good. Above 0.85 is excellent.")
 
     # individual results for each question
     df = results.to_pandas()
     df["question"] = questions
     df["sources"]  = [", ".join(s) for s in sources_list]
 
-    print("\n\n Individual Results:")
+    print("\n\nIndividual Results:")
     print("-" * 60)
     for i, row in df.iterrows():
         print(f"\nQ{i+1}: {row['question']}")
@@ -210,7 +215,7 @@ try:
     df["avg_score"] = df[["faithfulness", "answer_relevancy", "context_precision"]].mean(axis=1)
     worst = df.nsmallest(3, "avg_score")
 
-    print("\n\n❌ 3 Failure Cases (lowest scoring questions):")
+    print("\n\n3 Failure Cases (lowest scoring questions):")
     print("=" * 60)
     for rank, (_, row) in enumerate(worst.iterrows(), 1):
         q_idx = questions.index(row["question"])
@@ -246,10 +251,10 @@ try:
             f.write(f"  Answer:   {answers[q_idx][:300]}\n")
             f.write(f"  Avg Score: {row['avg_score']:.4f}\n")
 
-    print("\n Full results saved to ragas_results.txt")
+    print("\nFull results saved to ragas_results.txt")
 
 except Exception as e:
-    print(f"❌ RAGAS scoring failed: {e}")
+    print(f"RAGAS scoring failed: {e}")
     print("\nSaving raw answers anyway...")
     with open("ragas_results.txt", "w", encoding="utf-8") as f:
         f.write("RAW PIPELINE ANSWERS\n")
@@ -259,4 +264,4 @@ except Exception as e:
             f.write(f"Answer: {answers[i]}\n")
             f.write(f"Sources: {', '.join(sources_list[i])}\n")
             f.write("-" * 40 + "\n")
-    print(" Raw answers saved to ragas_results.txt")
+    print("Raw answers saved to ragas_results.txt")
