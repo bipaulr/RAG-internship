@@ -1,7 +1,10 @@
-# evaluate script for RAG pipeline using RAGAS
+# evaluate script for RAG pipeline
+# scores 20 questions using custom metrics instead of RAGAS
+# faithfulness, answer relevancy, and context precision scored via Groq LLM
 
 import os
 import sys
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,32 +13,16 @@ try:
     from langchain_huggingface import HuggingFaceEmbeddings
     from langchain_community.vectorstores import Chroma
     from groq import Groq
-    from datasets import Dataset
-    from ragas import evaluate
-    from ragas.metrics import Faithfulness, AnswerRelevancy, ContextPrecision
-    from ragas.llms import llm_factory
-    from openai import OpenAI
 except ImportError as e:
     print(f"Missing dependency: {e}")
-    print("Run: pip install ragas==0.4.3 datasets langchain-community langchain-huggingface sentence-transformers groq chromadb openai")
     sys.exit(1)
 
-GROQ_API_KEY   = os.getenv("GROQ_API_KEY", "").strip()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 if not GROQ_API_KEY:
     print("GROQ_API_KEY not found in .env file.")
     sys.exit(1)
-if not GEMINI_API_KEY:
-    print("GEMINI_API_KEY not found in .env file. RAGAS needs it for scoring.")
-    sys.exit(1)
 
 print("API keys loaded.")
-
-# RAGAS internally checks for OPENAI_API_KEY in some code paths even when
-# a custom client is passed to llm_factory. Since we are routing through
-# Gemini's OpenAI-compatible endpoint anyway, we set this to satisfy that check.
-os.environ["OPENAI_API_KEY"] = GEMINI_API_KEY
 
 CHROMA_DB_FOLDER = "./chroma_db"
 EMBEDDING_MODEL  = "sentence-transformers/all-MiniLM-L6-v2"
@@ -60,7 +47,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 print("Ready.\n")
 
 
-# 20 test questions with ground truth answers for evaluation
+# 20 test questions with ground truth answers
 TEST_DATA = [
     {"question": "What is Retrieval Augmented Generation?",
      "ground_truth": "Retrieval Augmented Generation (RAG) is a technique that combines information retrieval with text generation, allowing language models to access external knowledge sources to produce more accurate and up-to-date responses."},
@@ -105,9 +92,8 @@ TEST_DATA = [
 ]
 
 
-# running the RAG pipeline for a single question and returning the answer and sources
+# running the RAG pipeline for a single question
 def run_pipeline(question: str) -> dict:
-    """Run RAG pipeline and return answer + retrieved contexts."""
     results = vectorstore.similarity_search(question, k=TOP_K)
     chunks  = [doc.page_content for doc in results]
     sources = list(set(doc.metadata.get("source", "unknown") for doc in results))
@@ -134,134 +120,135 @@ def run_pipeline(question: str) -> dict:
     }
 
 
-# collects answers for all 20 questions and runs RAGAS evaluation on them
+# scores a single answer using Groq as the judge LLM
+# returns scores between 0 and 1 for each metric
+def score_answer(question, answer, contexts, ground_truth) -> dict:
+    context_text = "\n\n".join(contexts)
+
+    scoring_prompt = f"""You are an evaluation judge for a RAG (Retrieval Augmented Generation) system.
+Score the following answer on three metrics. Return ONLY a JSON object with three keys.
+
+Question: {question}
+
+Retrieved Context:
+{context_text}
+
+System Answer: {answer}
+
+Ground Truth Answer: {ground_truth}
+
+Score each metric from 0.0 to 1.0:
+
+1. faithfulness: Is the answer only using information from the retrieved context? (1.0 = fully grounded in context, 0.0 = made up facts not in context)
+2. answer_relevancy: Does the answer actually address the question asked? (1.0 = directly answers the question, 0.0 = irrelevant)
+3. context_precision: Are the retrieved context chunks relevant to the question? (1.0 = all chunks are relevant, 0.0 = chunks are irrelevant)
+
+Return ONLY this JSON, nothing else:
+{{"faithfulness": 0.0, "answer_relevancy": 0.0, "context_precision": 0.0}}"""
+
+    try:
+        response = groq_client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": scoring_prompt}],
+            temperature=0
+        )
+        raw = response.choices[0].message.content.strip()
+        # extract just the JSON part in case the model adds any text
+        start = raw.find("{")
+        end   = raw.rfind("}") + 1
+        scores = json.loads(raw[start:end])
+        return {
+            "faithfulness":      float(scores.get("faithfulness", 0)),
+            "answer_relevancy":  float(scores.get("answer_relevancy", 0)),
+            "context_precision": float(scores.get("context_precision", 0))
+        }
+    except Exception as e:
+        print(f"  Scoring failed: {e}")
+        return {"faithfulness": 0.0, "answer_relevancy": 0.0, "context_precision": 0.0}
+
+
+# run all 20 questions and collect results
 print("Running 20 questions through pipeline...\n")
 
-questions     = []
-answers       = []
-contexts      = []
-ground_truths = []
-sources_list  = []
+all_results = []
 
 for i, item in enumerate(TEST_DATA):
     print(f"  [{i+1}/20] {item['question'][:60]}...")
     try:
-        result = run_pipeline(item["question"])
-        questions.append(item["question"])
-        answers.append(result["answer"])
-        contexts.append(result["contexts"])
-        ground_truths.append(item["ground_truth"])
-        sources_list.append(result["sources"])
+        pipeline_result = run_pipeline(item["question"])
+        scores = score_answer(
+            question=item["question"],
+            answer=pipeline_result["answer"],
+            contexts=pipeline_result["contexts"],
+            ground_truth=item["ground_truth"]
+        )
+        all_results.append({
+            "question":         item["question"],
+            "ground_truth":     item["ground_truth"],
+            "answer":           pipeline_result["answer"],
+            "sources":          pipeline_result["sources"],
+            "faithfulness":     scores["faithfulness"],
+            "answer_relevancy": scores["answer_relevancy"],
+            "context_precision":scores["context_precision"],
+            "avg_score":        round((scores["faithfulness"] + scores["answer_relevancy"] + scores["context_precision"]) / 3, 4)
+        })
+        print(f"    faith={scores['faithfulness']:.2f}  relevancy={scores['answer_relevancy']:.2f}  precision={scores['context_precision']:.2f}")
     except Exception as e:
         print(f"  Failed: {e}")
 
-print(f"\n{len(answers)}/20 questions answered.\n")
+print(f"\n{len(all_results)}/20 questions evaluated.\n")
 
+# compute overall average scores
+avg_faith    = round(sum(r["faithfulness"]      for r in all_results) / len(all_results), 4)
+avg_relevancy= round(sum(r["answer_relevancy"]  for r in all_results) / len(all_results), 4)
+avg_precision= round(sum(r["context_precision"] for r in all_results) / len(all_results), 4)
 
-print("Running RAGAS evaluation using Gemini for scoring...")
-print("This may take 1-2 minutes...\n")
+print("=" * 60)
+print("EVALUATION RESULTS (RAGAS-style metrics, scored by Groq LLM)")
+print("=" * 60)
+print(f"Faithfulness:      {avg_faith}")
+print(f"Answer Relevancy:  {avg_relevancy}")
+print(f"Context Precision: {avg_precision}")
+print("=" * 60)
+print("Scores above 0.7 are good. Above 0.85 is excellent.")
 
-# using gemini as the judge llm for scoring the answers with RAGAS
-# gemini exposes an openai-compatible endpoint, so we use the openai client
-# pointed at google's servers instead of openai's servers
-gemini_openai_client = OpenAI(
-    api_key=GEMINI_API_KEY,
-    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-)
-ragas_llm = llm_factory("gemini-2.0-flash", client=gemini_openai_client)
+# find the 3 worst performing questions
+sorted_results = sorted(all_results, key=lambda x: x["avg_score"])
+worst_3 = sorted_results[:3]
 
-# initialise metrics with the judge LLM
-faithfulness      = Faithfulness(llm=ragas_llm)
-answer_relevancy  = AnswerRelevancy(llm=ragas_llm)
-context_precision = ContextPrecision(llm=ragas_llm)
+print("\n\n3 Failure Cases (lowest scoring questions):")
+print("=" * 60)
+for rank, r in enumerate(worst_3, 1):
+    print(f"\nFailure #{rank}")
+    print(f"  Question:          {r['question']}")
+    print(f"  Answer:            {r['answer'][:200]}...")
+    print(f"  Faithfulness:      {r['faithfulness']:.4f}")
+    print(f"  Answer Relevancy:  {r['answer_relevancy']:.4f}")
+    print(f"  Context Precision: {r['context_precision']:.4f}")
+    print(f"  Avg Score:         {r['avg_score']:.4f}")
 
-eval_dataset = Dataset.from_dict({
-    "question":    questions,
-    "answer":      answers,
-    "contexts":    contexts,
-    "ground_truth": ground_truths,
-})
+# save full results to file
+with open("ragas_results.txt", "w", encoding="utf-8") as f:
+    f.write("EVALUATION RESULTS\n")
+    f.write("=" * 60 + "\n")
+    f.write(f"Faithfulness:      {avg_faith}\n")
+    f.write(f"Answer Relevancy:  {avg_relevancy}\n")
+    f.write(f"Context Precision: {avg_precision}\n\n")
+    f.write("INDIVIDUAL RESULTS\n")
+    f.write("=" * 60 + "\n")
+    for i, r in enumerate(all_results):
+        f.write(f"\nQ{i+1}: {r['question']}\n")
+        f.write(f"  Answer:            {r['answer'][:300]}\n")
+        f.write(f"  Faithfulness:      {r['faithfulness']}\n")
+        f.write(f"  Answer Relevancy:  {r['answer_relevancy']}\n")
+        f.write(f"  Context Precision: {r['context_precision']}\n")
+        f.write(f"  Sources:           {', '.join(r['sources'])}\n")
+    f.write("\n\n3 FAILURE CASES\n")
+    f.write("=" * 60 + "\n")
+    for rank, r in enumerate(worst_3, 1):
+        f.write(f"\nFailure #{rank}\n")
+        f.write(f"  Question:  {r['question']}\n")
+        f.write(f"  Answer:    {r['answer'][:300]}\n")
+        f.write(f"  Avg Score: {r['avg_score']}\n")
 
-try:
-    results = evaluate(
-        dataset=eval_dataset,
-        metrics=[faithfulness, answer_relevancy, context_precision]
-    )
-
-    print("\n" + "=" * 60)
-    print("RAGAS EVALUATION RESULTS")
-    print("=" * 60)
-    print(f"Faithfulness:      {results['faithfulness']:.4f}")
-    print(f"Answer Relevancy:  {results['answer_relevancy']:.4f}")
-    print(f"Context Precision: {results['context_precision']:.4f}")
-    print("=" * 60)
-    print("\nScores above 0.7 are good. Above 0.85 is excellent.")
-
-    # individual results for each question
-    df = results.to_pandas()
-    df["question"] = questions
-    df["sources"]  = [", ".join(s) for s in sources_list]
-
-    print("\n\nIndividual Results:")
-    print("-" * 60)
-    for i, row in df.iterrows():
-        print(f"\nQ{i+1}: {row['question']}")
-        print(f"  Faithfulness:      {row['faithfulness']:.4f}")
-        print(f"  Answer Relevancy:  {row['answer_relevancy']:.4f}")
-        print(f"  Context Precision: {row['context_precision']:.4f}")
-        print(f"  Sources: {row['sources']}")
-
-    # 3 lowest scoring questions
-    df["avg_score"] = df[["faithfulness", "answer_relevancy", "context_precision"]].mean(axis=1)
-    worst = df.nsmallest(3, "avg_score")
-
-    print("\n\n3 Failure Cases (lowest scoring questions):")
-    print("=" * 60)
-    for rank, (_, row) in enumerate(worst.iterrows(), 1):
-        q_idx = questions.index(row["question"])
-        print(f"\nFailure #{rank}")
-        print(f"  Question:     {row['question']}")
-        print(f"  Answer:       {answers[q_idx][:200]}...")
-        print(f"  Faithfulness:      {row['faithfulness']:.4f}")
-        print(f"  Answer Relevancy:  {row['answer_relevancy']:.4f}")
-        print(f"  Context Precision: {row['context_precision']:.4f}")
-
-    # save full results to ragas_results.txt
-    with open("ragas_results.txt", "w", encoding="utf-8") as f:
-        f.write("RAGAS EVALUATION RESULTS\n")
-        f.write("=" * 60 + "\n")
-        f.write(f"Faithfulness:      {results['faithfulness']:.4f}\n")
-        f.write(f"Answer Relevancy:  {results['answer_relevancy']:.4f}\n")
-        f.write(f"Context Precision: {results['context_precision']:.4f}\n\n")
-        f.write("INDIVIDUAL RESULTS\n")
-        f.write("=" * 60 + "\n")
-        for i, row in df.iterrows():
-            f.write(f"\nQ{i+1}: {row['question']}\n")
-            f.write(f"  Answer:            {answers[i][:300]}\n")
-            f.write(f"  Faithfulness:      {row['faithfulness']:.4f}\n")
-            f.write(f"  Answer Relevancy:  {row['answer_relevancy']:.4f}\n")
-            f.write(f"  Context Precision: {row['context_precision']:.4f}\n")
-            f.write(f"  Sources:           {row['sources']}\n")
-        f.write("\n\n3 FAILURE CASES\n")
-        f.write("=" * 60 + "\n")
-        for rank, (_, row) in enumerate(worst.iterrows(), 1):
-            q_idx = questions.index(row["question"])
-            f.write(f"\nFailure #{rank}\n")
-            f.write(f"  Question: {row['question']}\n")
-            f.write(f"  Answer:   {answers[q_idx][:300]}\n")
-            f.write(f"  Avg Score: {row['avg_score']:.4f}\n")
-
-    print("\nFull results saved to ragas_results.txt")
-
-except Exception as e:
-    print(f"RAGAS scoring failed: {e}")
-    print("\nSaving raw answers anyway...")
-    with open("ragas_results.txt", "w", encoding="utf-8") as f:
-        f.write("RAW PIPELINE ANSWERS\n")
-        f.write("=" * 60 + "\n")
-        for i, q in enumerate(questions):
-            f.write(f"\nQ{i+1}: {q}\n")
-            f.write(f"Answer: {answers[i]}\n")
-            f.write(f"Sources: {', '.join(sources_list[i])}\n")
-            f.write("-" * 40 + "\n")
-    print("Raw answers saved to ragas_results.txt")
+print("\nFull results saved to ragas_results.txt")
