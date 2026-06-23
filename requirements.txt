@@ -1,9 +1,9 @@
 streamlit
-langchain
-langchain-community
+langchain==0.3.25
+langchain-community==0.3.24
 langchain-huggingface
 langchain-text-splitters
 sentence-transformers
-chromadb
+chromadb==0.5.23
 groq
 python-dotenv
