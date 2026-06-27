@@ -208,13 +208,9 @@ streamlit run app.py
 ## Sample Questions
 
 - What is Retrieval-Augmented Generation?
-- Explain embeddings.
 - What is a vector database?
-- Why is chunking important?
 - Explain semantic search.
-- What is cosine similarity?
 - Explain the RAG pipeline.
-- What is LangGraph?
 
 ---
 
