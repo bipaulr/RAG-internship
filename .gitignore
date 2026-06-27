@@ -1,6 +1,5 @@
 .env
 .streamlit/secrets.toml
-chroma_db/
 documents/
 ragas_env/
 __pycache__/

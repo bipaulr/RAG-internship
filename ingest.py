@@ -10,7 +10,7 @@ try:
     from langchain_community.document_loaders import TextLoader
     from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain_huggingface import HuggingFaceEmbeddings
-    from langchain_community.vectorstores import Chroma
+    from langchain_chroma import Chroma
 except ImportError as e:
     print(f"  Missing dependency: {e}")
     print("Run: py -3.13 -m pip install chromadb langchain langchain-community langchain-huggingface langchain-text-splitters sentence-transformers")
